@@ -2,7 +2,7 @@ import os
 import requests
 
 class BaseAPIClient:
-    DEFAULT_BASE_URL = os.getenv('API_BASE_URL', 'mockedapi.com/api/')
+    DEFAULT_BASE_URL = os.getenv('API_BASE_URL', 'https://mockedapi.com/api/')
     DEFAULT_TIMEOUT = float(os.getenv('API_TIMEOUT', '10'))
 
     def __init__(self, base_url=None, timeout=None):
