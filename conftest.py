@@ -17,10 +17,18 @@ def driver():
     
     driver.quit()
     
+@pytest.fixture(scope="session")
+def api_config():
+    return {
+        "base_url": "https://mockedapi.com/api/",
+        "timeout": 5
+    }
+    
 @pytest.fixture
-def payment_client():
-    return PaymentEndpoint()
+def payment_client(api_config):
+    return PaymentEndpoint(base_url=api_config["base_url"],timeout=api_config["timeout"])
 
 @pytest.fixture
-def reservation_client():
-    return ReservationsEndpoint()
+def reservation_client(api_config):
+    return ReservationsEndpoint(base_url=api_config["base_url"],timeout=api_config["timeout"])
+
