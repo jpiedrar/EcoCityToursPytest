@@ -3,7 +3,7 @@ import pytest
 import requests
 from endpoints.payment import PaymentEndpoint, PaymentError
 
-API_BASE_URL = 'mockedapi.com/api/'
+API_BASE_URL = 'https://mockedapi.com/api/'
 PAYMENT_URL = f'{API_BASE_URL}payments/'
 PAYMENT = {'reservationId': 123, 'amount': 100}
 IDEMPOTENCY_KEY = 'reservation-123-payment'
@@ -15,12 +15,12 @@ def mock_response(status_code, body):
     return response
 
 @patch('requests.post')
-def test_payment_succeeds_on_first_attempt(mock_post):
+def test_payment_succeeds_on_first_attempt(mock_post, payment_client):
     mock_post.return_value = mock_response(
         200, {'status': 'processed', 'paymentId': 456}
     )
 
-    response = PaymentEndpoint(base_url=API_BASE_URL).process_payment(
+    response = payment_client.process_payment(
         PAYMENT, idempotency_key=IDEMPOTENCY_KEY
     )
 
@@ -35,12 +35,12 @@ def test_payment_succeeds_on_first_attempt(mock_post):
 
 
 @patch('requests.post')
-def test_payment_retries_with_same_idempotency_key_and_processes_once(mock_post):
+def test_payment_retries_with_same_idempotency_key_and_processes_once(mock_post, payment_client):
     failed = mock_response(500, {'status': 'failed'})
     processed = mock_response(200, {'status': 'processed', 'paymentId': 456})
     mock_post.side_effect = [failed, processed]
 
-    response = PaymentEndpoint(base_url=API_BASE_URL).process_payment(
+    response = payment_client.process_payment(
         PAYMENT, idempotency_key=IDEMPOTENCY_KEY
     )
 
@@ -54,12 +54,12 @@ def test_payment_retries_with_same_idempotency_key_and_processes_once(mock_post)
     assert mock_post.call_count == 2
 
 @patch('requests.post')
-def test_payment_is_not_processed_after_three_failed_attempts(mock_post):
+def test_payment_is_not_processed_after_three_failed_attempts(mock_post, payment_client):
     failures = [mock_response(500, {'status': 'failed'}) for _ in range(3)]
     mock_post.side_effect = failures
 
     with pytest.raises(PaymentError) as raised_error:
-        PaymentEndpoint(base_url=API_BASE_URL).process_payment(
+        payment_client.process_payment(
             PAYMENT, idempotency_key=IDEMPOTENCY_KEY
         )
 
@@ -76,12 +76,12 @@ def test_payment_is_not_processed_after_three_failed_attempts(mock_post):
 
 @pytest.mark.parametrize("status_code", [500, 502, 503, 504])
 @patch("requests.post")
-def test_payment_server_errors(mock_post, status_code):
+def test_payment_server_errors(mock_post, status_code, payment_client):
     failures = [mock_response(status_code, {'status': 'failed'}) for _ in range(3)]
     mock_post.side_effect = failures
     
     with pytest.raises(PaymentError) as raised_error: 
-        PaymentEndpoint(base_url=API_BASE_URL).process_payment(
+        payment_client.process_payment(
             PAYMENT, idempotency_key=IDEMPOTENCY_KEY
         )
     
@@ -92,13 +92,13 @@ def test_payment_server_errors(mock_post, status_code):
     assert mock_post.call_count == 3
     
 @patch('requests.post')
-def test_payment_reports_404_without_retrying(mock_post):
+def test_payment_reports_404_without_retrying(mock_post, payment_client):
     mock_post.return_value = mock_response(
         404, {'error': 'Payment endpoint was not found'}
     )
 
     with pytest.raises(PaymentError) as raised_error:
-        PaymentEndpoint(base_url=API_BASE_URL).process_payment(PAYMENT)
+        payment_client.process_payment(PAYMENT)
 
     error = raised_error.value
     assert str(error) == (
@@ -112,11 +112,11 @@ def test_payment_reports_404_without_retrying(mock_post):
 
 
 @patch('requests.post')
-def test_payment_reports_timeout_after_three_attempts(mock_post):
+def test_payment_reports_timeout_after_three_attempts(mock_post, payment_client):
     mock_post.side_effect = requests.Timeout('request timed out')
 
     with pytest.raises(PaymentError) as raised_error:
-        PaymentEndpoint(base_url=API_BASE_URL).process_payment(
+        payment_client.process_payment(
             PAYMENT, idempotency_key=IDEMPOTENCY_KEY
         )
     error = raised_error.value
@@ -142,12 +142,12 @@ def test_payment_reports_timeout_after_three_attempts(mock_post):
     ],
 )
 @patch("requests.post")
-def test_payment_server_errors_multiparams(mock_post, status_code, expected_type, expected_attempts):
+def test_payment_server_errors_multiparams(mock_post, status_code, expected_type, expected_attempts, payment_client):
     failures = [mock_response(status_code, {'status': 'failed'}) for _ in range(expected_attempts)]
     mock_post.side_effect = failures
     
     with pytest.raises(PaymentError) as raised_error: 
-        PaymentEndpoint(base_url=API_BASE_URL).process_payment(
+        payment_client.process_payment(
             PAYMENT, idempotency_key=IDEMPOTENCY_KEY
         )
     

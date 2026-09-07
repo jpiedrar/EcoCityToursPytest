@@ -9,6 +9,8 @@ RESERVATION_CONTRACT = {
     'status': str,
     'message': str,
 }
+API_BASE_URL = 'https://mockedapi.com/api/'
+RESERVATION_URL = f'{API_BASE_URL}reservations/'
 
 def assert_reservation_contract(body):
     assert set(body) == set(RESERVATION_CONTRACT)
@@ -18,7 +20,7 @@ def assert_reservation_contract(body):
         )
 
 @patch('requests.post')
-def test_new_reservation(mock_post):
+def test_new_reservation(mock_post, reservation_client):
     mock_response = mock_post.return_value
     mock_response.status_code = 200
     mock_response.json.return_value = {
@@ -29,8 +31,7 @@ def test_new_reservation(mock_post):
         'status': 'booked',
         'message': 'created'
     }
-    client = ReservationsEndpoint(base_url='mockedapi.com/api/')
-    reservation = client.post_new_reservation()
+    reservation = reservation_client.post_new_reservation()
     body = reservation.json()
 
     assert_reservation_contract(body)
@@ -39,11 +40,11 @@ def test_new_reservation(mock_post):
     assert body['status'] == 'booked'
     assert reservation.status_code == 200
     mock_post.assert_called_once_with(
-        'mockedapi.com/api/reservations/', timeout=10.0
+        RESERVATION_URL, timeout=10.0
     )
 
 @patch('requests.post')
-def test_no_reservation_available(mock_post):
+def test_no_reservation_available(mock_post, reservation_client):
     mock_response = mock_post.return_value
     mock_response.status_code = 200
     mock_response.json.return_value = {
@@ -54,8 +55,7 @@ def test_no_reservation_available(mock_post):
         'status': 'invalid',
         'message': 'There is no room for the reservation'
     }
-    client = ReservationsEndpoint(base_url='mockedapi.com/api/')
-    reservation = client.post_new_reservation()
+    reservation = reservation_client.post_new_reservation()
 
     assert reservation.json()['name'] == 'Juan Piedra'
     assert reservation.json()['reservationId'] is None
@@ -63,5 +63,5 @@ def test_no_reservation_available(mock_post):
     assert reservation.json()['message'] == 'There is no room for the reservation'
     assert reservation.status_code == 200
     mock_post.assert_called_once_with(
-        'mockedapi.com/api/reservations/', timeout=10.0
+        RESERVATION_URL, timeout=10.0
     )
