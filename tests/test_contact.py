@@ -1,5 +1,3 @@
-import pytest
-from pages.home_page import HomePage
 from pages.contact_page import ContactPage
 
 def test_validate_url(driver):

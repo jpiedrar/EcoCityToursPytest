@@ -5,7 +5,7 @@ RESERVATION_CONTRACT = {
     'name': str,
     'reservationId': int,
     'date': str,
-    'amountOfPeople': str,
+    'amountOfPeople': int,
     'status': str,
     'message': str,
 }
@@ -25,13 +25,12 @@ def test_new_reservation(mock_post):
         'name': 'Juan Piedra', 
         'reservationId': 123, 
         'date': 'sept 6',
-        'amountOfPeople': '5',
+        'amountOfPeople': 5,
         'status': 'booked',
         'message': 'created'
     }
-    client = ReservationsEndpoint()
-    url = 'mockedapi.com/api/'
-    reservation = client.post_new_reservation(url)
+    client = ReservationsEndpoint(base_url='mockedapi.com/api/')
+    reservation = client.post_new_reservation()
     body = reservation.json()
 
     assert_reservation_contract(body)
@@ -39,7 +38,9 @@ def test_new_reservation(mock_post):
     assert body['reservationId'] == 123
     assert body['status'] == 'booked'
     assert reservation.status_code == 200
-    mock_post.assert_called_once_with(url)
+    mock_post.assert_called_once_with(
+        'mockedapi.com/api/reservations/', timeout=10.0
+    )
 
 @patch('requests.post')
 def test_no_reservation_available(mock_post):
@@ -53,13 +54,14 @@ def test_no_reservation_available(mock_post):
         'status': 'invalid',
         'message': 'There is no room for the reservation'
     }
-    client = ReservationsEndpoint()
-    url = 'mockedapi.com/api/'
-    reservation = client.post_new_reservation(url)
+    client = ReservationsEndpoint(base_url='mockedapi.com/api/')
+    reservation = client.post_new_reservation()
 
     assert reservation.json()['name'] == 'Juan Piedra'
     assert reservation.json()['reservationId'] is None
     assert reservation.json()['status'] == 'invalid'
     assert reservation.json()['message'] == 'There is no room for the reservation'
     assert reservation.status_code == 200
-    mock_post.assert_called_once_with(url)
+    mock_post.assert_called_once_with(
+        'mockedapi.com/api/reservations/', timeout=10.0
+    )

@@ -32,7 +32,7 @@ The reservation tests mock the HTTP request and cover:
 
 ### Payment API tests
 
-The payment tests mock all HTTP requests and cover exactly three retry scenarios:
+The payment tests mock all HTTP requests and cover three core retry scenarios:
 
 1. The payment succeeds on the first attempt.
 2. The first attempt fails and the second succeeds. Both requests reuse the same idempotency key, and the payment is processed once.
@@ -40,12 +40,15 @@ The payment tests mock all HTTP requests and cover exactly three retry scenarios
 
 The payment client retries server errors up to three times. It sends the same `Idempotency-Key` header with every attempt so a retried request cannot create a second payment when supported by the payment service.
 
+Additional tests cover detailed HTTP 404 and timeout errors. Failed payments raise `PaymentError` with structured `error_type`, `status_code`, `attempts`, and `details` attributes. Client errors such as HTTP 404 fail immediately, while server errors and timeouts are retried up to the configured attempt limit.
+
 ## Project structure
 
 ```text
 .
 ├── conftest.py
 ├── endpoints/
+│   ├── api_client.py
 │   ├── payment.py
 │   └── reservations.py
 ├── pages/
@@ -104,5 +107,7 @@ python3 -m pytest -v
 ## Notes
 
 - API tests do not call real reservation or payment services; their responses are mocked.
+- Reservation and payment clients inherit their base URL and request timeout configuration from `APIClient`.
+- Set `API_BASE_URL` and `API_TIMEOUT` to override the API defaults. Tests inject their own base URL.
 - Browser tests target the deployed site configured by `BasePage.BASE_URL`.
 - The Selenium fixture creates a fresh browser for every test and closes it afterward.

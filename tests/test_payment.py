@@ -1,8 +1,12 @@
 from unittest.mock import Mock, patch
 
-from endpoints.payment import PaymentEndpoint
+import pytest
+import requests
 
-PAYMENT_URL = 'mockedapi.com/api/payments/'
+from endpoints.payment import PaymentEndpoint, PaymentError
+
+API_BASE_URL = 'mockedapi.com/api/'
+PAYMENT_URL = f'{API_BASE_URL}payments/'
 PAYMENT = {'reservationId': 123, 'amount': 100}
 IDEMPOTENCY_KEY = 'reservation-123-payment'
 
@@ -18,8 +22,8 @@ def test_payment_succeeds_on_first_attempt(mock_post):
         200, {'status': 'processed', 'paymentId': 456}
     )
 
-    response = PaymentEndpoint().process_payment(
-        PAYMENT_URL, PAYMENT, idempotency_key=IDEMPOTENCY_KEY
+    response = PaymentEndpoint(base_url=API_BASE_URL).process_payment(
+        PAYMENT, idempotency_key=IDEMPOTENCY_KEY
     )
 
     assert response.status_code == 200
@@ -28,6 +32,7 @@ def test_payment_succeeds_on_first_attempt(mock_post):
         PAYMENT_URL,
         json=PAYMENT,
         headers={'Idempotency-Key': IDEMPOTENCY_KEY},
+        timeout=10.0,
     )
 
 
@@ -37,8 +42,8 @@ def test_payment_retries_with_same_idempotency_key_and_processes_once(mock_post)
     processed = mock_response(200, {'status': 'processed', 'paymentId': 456})
     mock_post.side_effect = [failed, processed]
 
-    response = PaymentEndpoint().process_payment(
-        PAYMENT_URL, PAYMENT, idempotency_key=IDEMPOTENCY_KEY
+    response = PaymentEndpoint(base_url=API_BASE_URL).process_payment(
+        PAYMENT, idempotency_key=IDEMPOTENCY_KEY
     )
 
     assert response is processed
@@ -48,9 +53,7 @@ def test_payment_retries_with_same_idempotency_key_and_processes_once(mock_post)
         IDEMPOTENCY_KEY,
         IDEMPOTENCY_KEY,
     ]
-    assert sum(
-        result.json()['status'] == 'processed' for result in (failed, processed)
-    ) == 1
+    assert mock_post.call_count == 2
 
 
 @patch('requests.post')
@@ -58,15 +61,60 @@ def test_payment_is_not_processed_after_three_failed_attempts(mock_post):
     failures = [mock_response(500, {'status': 'failed'}) for _ in range(3)]
     mock_post.side_effect = failures
 
-    response = PaymentEndpoint().process_payment(
-        PAYMENT_URL, PAYMENT, idempotency_key=IDEMPOTENCY_KEY
-    )
+    with pytest.raises(PaymentError) as raised_error:
+        PaymentEndpoint(base_url=API_BASE_URL).process_payment(
+            PAYMENT, idempotency_key=IDEMPOTENCY_KEY
+        )
 
-    assert response is failures[-1]
-    assert response.json()['status'] == 'failed'
+    assert raised_error.value.error_type == 'server'
+    assert raised_error.value.status_code == 500
+    assert raised_error.value.attempts == 3
+    assert raised_error.value.details == {'status': 'failed'}
     assert mock_post.call_count == 3
     assert all(
         call.kwargs['headers']['Idempotency-Key'] == IDEMPOTENCY_KEY
         for call in mock_post.call_args_list
     )
     assert all(result.json()['status'] != 'processed' for result in failures)
+
+
+@patch('requests.post')
+def test_payment_reports_404_without_retrying(mock_post):
+    mock_post.return_value = mock_response(
+        404, {'error': 'Payment endpoint was not found'}
+    )
+
+    with pytest.raises(PaymentError) as raised_error:
+        PaymentEndpoint(base_url=API_BASE_URL).process_payment(PAYMENT)
+
+    error = raised_error.value
+    assert str(error) == (
+        "Payment failed with HTTP 404 Not Found: "
+        "{'error': 'Payment endpoint was not found'}"
+    )
+    assert error.error_type == 'client'
+    assert error.status_code == 404
+    assert error.attempts == 1
+    mock_post.assert_called_once()
+
+
+@patch('requests.post')
+def test_payment_reports_timeout_after_three_attempts(mock_post):
+    mock_post.side_effect = requests.Timeout('request timed out')
+
+    with pytest.raises(PaymentError) as raised_error:
+        PaymentEndpoint(base_url=API_BASE_URL).process_payment(
+            PAYMENT, idempotency_key=IDEMPOTENCY_KEY
+        )
+
+    error = raised_error.value
+    assert str(error) == 'Payment timed out after 3 attempts: request timed out'
+    assert error.error_type == 'timeout'
+    assert error.status_code is None
+    assert error.attempts == 3
+    assert error.details == 'request timed out'
+    assert mock_post.call_count == 3
+    assert all(
+        call.kwargs['headers']['Idempotency-Key'] == IDEMPOTENCY_KEY
+        for call in mock_post.call_args_list
+    )

@@ -1,6 +1,7 @@
-import requests
+from endpoints.api_client import APIClient
 
-class ReservationsEndpoint:
-      def post_new_reservation(self, url):
-            response = requests.post(url)
-            return response
+class ReservationsEndpoint(APIClient):
+    PATH = 'reservations/'
+
+    def post_new_reservation(self):
+        return self.post(self.PATH)

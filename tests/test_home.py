@@ -8,9 +8,9 @@ def test_validate_url(driver):
 
 def test_validate_all_locators(driver):
     home_page = HomePage(driver)
-    assert home_page.is_tours_section_visible() == True
-    assert home_page.is_guide_section_visible() == True
-    assert home_page.is_contact_section_visible() == True
+    assert home_page.is_tours_section_visible()
+    assert home_page.is_guide_section_visible()
+    assert home_page.is_contact_section_visible()
 
 def test_validate_title_label(driver):
     home_page = HomePage(driver)
