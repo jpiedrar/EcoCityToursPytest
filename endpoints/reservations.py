@@ -1,6 +1,6 @@
-from endpoints.api_client import APIClient
+from endpoints.base_api import BaseAPIClient
 
-class ReservationsEndpoint(APIClient):
+class ReservationsEndpoint(BaseAPIClient):
     PATH = 'reservations/'
 
     def post_new_reservation(self):

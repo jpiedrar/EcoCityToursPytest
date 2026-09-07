@@ -1,7 +1,7 @@
 import uuid
 from http import HTTPStatus
 import requests
-from endpoints.api_client import APIClient
+from endpoints.base_api import BaseAPIClient
 
 class PaymentError(Exception):
     def __init__(self, message, *, error_type, attempts, status_code=None, details=None):
@@ -11,7 +11,7 @@ class PaymentError(Exception):
         self.status_code = status_code
         self.details = details
 
-class PaymentEndpoint(APIClient):
+class PaymentEndpoint(BaseAPIClient):
     PATH = 'payments/'
 
     def process_payment(self, payment, idempotency_key=None, max_attempts=3):
